@@ -1,21 +1,52 @@
-# AI Prompt and Use Record
+# AI Assistance Record — Technical Q&A and Review Decisions
 
-## Context
-The user supplied the Course Waitlist assessment requirements, with no starter project or separate rubric file. The original assignment permits a minimal in-memory service/CLI. This record is a candid description of AI-assisted implementation and executable verification, **not a claim of independent human review**. No credentials, tokens, or sensitive learner data appear in the recorded prompts.
+This record is a **retrospective summary of actual prompts and decisions** from the course-registration assessment conversation. AI suggestions below are summarized, not presented as verbatim historical responses. It does not claim a separate, unaided human code review.
 
-| Prompt used / relevant excerpt | AI output or summary | Accepted, edited or rejected | File/decision |
-|---|---|---|---|
-| "Implement enrollment, dropping, and FIFO waitlist promotion ... State the prerequisite and waitlist assumptions" | One synchronized Java service with a deterministic ordered queue, duplicate prevention, and prerequisite checks. | **Accepted/edited.** Selected `LinkedHashSet`, explicit ineligible-learner skip-but-retain policy and result codes. | `CourseService.java`, `DESIGN.md` |
-| "Tests cover available capacity, full capacity, duplicate requests, FIFO promotion, prerequisite failure, and invalid or repeated drops ... concurrency test" | Build focused service tests including a concurrency stress case. | **Accepted/expanded.** Added revoked eligibility, restored eligibility, cancellation, vacant-seat edge case, waiting priority and concurrency assertions. | `CourseServiceTest.java`, `test-results.txt` |
-| "do the above assignment using java backend and javascript frontend html" | A Java HTTP server and browser UI were initially implemented. | **Rejected for final assessment scope.** The later explicit request prioritized the PDF's no-frontend candidate expectations; removed both, retaining the Java service/CLI fallback. | Removed `Server.java` and `web/`; added `Demo.java` |
-| "please check the deliverables and candidate expectations and act according" | Recheck queue/capacity invariants and test code rather than relying on initial generation. | **Accepted/edited.** Discovered that an ineligible retained queue member could block an eligible new learner from a vacant seat; modified capacity check and added regression coverage. | `CourseService.java`, `CourseServiceTest.java`, `DESIGN.md` |
+## 1. How should the enrollment and FIFO waitlist work?
 
-## Verification evidence and review boundary
-Test and demo were executed locally with OpenJDK 21:
-```bash
-bash test.sh
-bash run.sh
-```
-The attached `test-results.txt` records **14/14 passed** including the concurrent capacity/uniqueness test; `demo-results.txt` captures the CLI example. The corner case above was found by reviewing the service logic against the capacity acceptance criterion and was fixed before executing the final regression suite.
+**User prompt (excerpt):** “Implement enrollment, dropping, and FIFO waitlist promotion for one course offering ... A learner may enroll only once. When the course is full, eligible learners join the waitlist.”
 
-The review and verification were AI-assisted with actual compiler/test execution. **No independent human reviewer has reviewed or approved the code**; a submitting candidate should read the implementation and rerun the tests before personally attesting to independent review. The separate `Course-Registration-Rubric-Score.md` was not provided and is not invented.
+**AI suggestion (summary):** Build one Java service with an in-memory enrollment set and an ordered waitlist. Return explicit outcomes for enrollment, waitlisting and duplicates. When a seat opens, scan from the front and promote the earliest eligible learner.
+
+**Decision — Accepted with edits:** Used `LinkedHashSet` for uniqueness plus insertion order, explicit result codes, and a synchronized promotion method. Added a documented rule for ineligible waitlisted learners rather than silently removing them.
+
+**Affected files:** `src/main/java/com/example/waitlist/CourseService.java`, `DESIGN.md`.
+
+## 2. How should prerequisite failures and ineligible waiting learners be handled?
+
+**User prompt (excerpt):** “State the prerequisite and waitlist assumptions. In particular, define whether an ineligible learner is skipped or remains waiting, and apply that policy consistently.”
+
+**AI suggestion (summary):** Reject learners who fail the prerequisite at the time of the initial request; retain learners who later lose eligibility on the waitlist, skipping them during promotion until they become eligible again.
+
+**Decision — Accepted and clarified:** Initial ineligible requests are rejected. Later-ineligible waitlisted learners keep their original positions but are skipped for promotion. Existing enrollments are not revoked automatically. During review, a vacant-seat edge case was identified: retained ineligible waiters must not prevent an eligible new learner from filling an otherwise empty seat. The enrollment check was corrected and a regression test added.
+
+**Affected files:** `CourseService.java`, `CourseServiceTest.java`, `DESIGN.md`.
+
+## 3. What tests are necessary to establish reliability?
+
+**User prompt (excerpt):** “Tests cover available capacity, full capacity, duplicate requests, FIFO promotion, prerequisite failure, and invalid or repeated drops. If the starter uses concurrent requests, preserve its transaction or locking pattern and add a focused concurrency test where practical.”
+
+**AI suggestion (summary):** Use a dependency-free Java test suite with assertions for acceptance criteria and a multi-threaded enrollment test to detect overbooking or duplicates.
+
+**Decision — Accepted and expanded:** Added tests for prerequisite revocation, re-eligibility, waitlist cancellation, vacant-seat behavior, waiting priority, and concurrent enrollment. Mutations and snapshots use the same instance-level `synchronized` lock.
+
+**Affected files:** `src/test/java/com/example/waitlist/CourseServiceTest.java`, `test.sh`, `test-results.txt`.
+
+**Verification:** The documented local execution of `bash test.sh` reports 14 passing tests. Reviewers can rerun the command against the submitted source.
+
+## 4. Should this solution include a Java HTTP server and HTML/JavaScript frontend?
+
+**User prompt:** “do the above assignment using java backend and javascript frontend html”
+
+**AI suggestion (summary):** A Java HTTP server and small HTML/CSS/JavaScript interface were initially added so enrollment and waitlisting could be demonstrated in a browser.
+
+**Decision — Rejected for the final submission:** In a later request the user explicitly directed the work to follow the assessment’s *Candidate Expectations*, which say that, without a supplied starter project, a small service/CLI fallback should be used and no frontend should be built. The HTTP server and frontend were therefore removed. A minimal `Demo.java` illustrates the service.
+
+**Affected files:** Removed `Server.java` and `web/`; retained `CourseService.java`; added `Demo.java`, `run.sh`, and `demo-results.txt`.
+
+## Verification and limitations
+
+- **Code verification:** Java service/test compilation and execution using the commands in `README.md`. `test-results.txt` and `demo-results.txt` contain the recorded results.
+- **Review scope:** The AI-assisted review checked capacity, queue ordering, eligibility and duplicate handling, and corrected the empty-seat edge case. This is **not** evidence of independent human review; the submitting candidate should personally review and run the tests before attesting to that expectation.
+- **Data safety:** No credentials, tokens, student records or unnecessary sensitive data were used in the prompts recorded here.
+- **Project constraints:** No starter project or separate rubric scorecard was supplied. The project uses the assignment's in-memory CLI fallback.
