@@ -1,0 +1,9 @@
+{"code":"UPDATED","message":"Prerequisite status updated","learner":"alice","promoted":null}
+{"code":"UPDATED","message":"Prerequisite status updated","learner":"bob","promoted":null}
+{"code":"UPDATED","message":"Prerequisite status updated","learner":"carol","promoted":null}
+{"code":"ENROLLED","message":"Enrollment successful","learner":"alice","promoted":null}
+{"code":"ENROLLED","message":"Enrollment successful","learner":"bob","promoted":null}
+{"code":"WAITLISTED","message":"Course full; joined FIFO waitlist","learner":"carol","promoted":null}
+{"code":"DROPPED","message":"Dropped and promoted carol","learner":"alice","promoted":"carol"}
+{"capacity":2,"enrolled":["bob","carol"],"waitlisted":[]}
+Frontend HTTP status: 200
