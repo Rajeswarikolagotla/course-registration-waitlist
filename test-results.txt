@@ -1,0 +1,13 @@
+PASS enroll with capacity
+PASS full course waitlist
+PASS duplicate enrolled
+PASS duplicate waitlist
+PASS FIFO promotion
+PASS prerequisite failure
+PASS skip revoked and retain
+PASS retained learner eventually promoted
+PASS invalid IDs
+PASS repeated drop
+PASS waitlist cancellation
+PASS capacity invariant under concurrency
+ALL TESTS PASSED: 12
