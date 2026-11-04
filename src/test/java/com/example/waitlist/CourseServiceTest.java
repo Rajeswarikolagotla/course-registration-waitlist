@@ -21,6 +21,19 @@ public final class CourseServiceTest {
         test("invalid IDs",()->{var s=new CourseService(1);boolean thrown=false;try{s.enroll("bad id");}catch(IllegalArgumentException e){thrown=true;}check(thrown&&s.snapshot().enrolled().isEmpty(),"invalid");});
         test("repeated drop",()->{var s=new CourseService(1);eligible(s,"a");s.enroll("a");s.drop("a");check(s.drop("a").code().equals("NOT_REGISTERED"),"repeated drop");});
         test("waitlist cancellation",()->{var s=new CourseService(1);eligible(s,"a","b");s.enroll("a");s.enroll("b");check(s.drop("b").code().equals("WAITLIST_REMOVED")&&s.snapshot().waitlisted().isEmpty(),"cancel");});
+        test("eligible newcomer fills vacancy when queued learners ineligible",()->{
+            var s=new CourseService(1);eligible(s,"a","b","c");
+            s.enroll("a");s.enroll("b");s.setPrerequisite("b",false);
+            check(s.drop("a").promoted()==null,"no eligible learner to promote");
+            check(s.enroll("c").code().equals("ENROLLED"),"vacant seat should be used");
+            check(s.snapshot().waitlisted().equals(List.of("b")),"ineligible queued learner retained");
+        });
+        test("eligible waiting learner takes priority over new arrival",()->{
+            var s=new CourseService(1);eligible(s,"a","b","c");
+            s.enroll("a");s.enroll("b");
+            check("b".equals(s.drop("a").promoted()),"FIFO priority");
+            check(s.enroll("c").code().equals("WAITLISTED"),"newcomer must wait");
+        });
         test("capacity invariant under concurrency",()->{
             var s=new CourseService(3);int count=60;for(int i=0;i<count;i++)s.setPrerequisite("u"+i,true);
             ExecutorService pool=Executors.newFixedThreadPool(12);
