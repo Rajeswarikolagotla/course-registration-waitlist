@@ -1,38 +1,26 @@
-# Design specification
+# Design Specification — Single Course Offering
 
-## Boundary and model
+## Boundary, model and APIs
+No starter project or prescribed data model was supplied. The fallback is a single in-memory `CourseService`. Its state is an integer capacity, `LinkedHashSet<String>` enrolled IDs, `LinkedHashSet<String>` FIFO waitlist IDs, and `HashSet<String>` of learners who have completed one prerequisite. No database, network API, frontend, catalog or identity system.
 
-Single in-memory course offering. `CourseService` owns positive `capacity`, an ordered set of `enrolled` learner IDs, an ordered set of `waitlist` learner IDs, and a set of learners who have completed the prerequisite. `Server` adapts form-encoded HTTP requests to service calls and serves static assets. The browser never owns authoritative enrollment state.
+Public Java APIs: `CourseService(capacity)` (capacity >= 1), `setPrerequisite(id, boolean)`, `enroll(id)`, `drop(id)`, and `snapshot()`. Enrollment returns `ENROLLED`, `WAITLISTED`, `INELIGIBLE`, `ALREADY_ENROLLED`, or `ALREADY_WAITLISTED`. Drop returns `DROPPED` (with optional promoted ID), `WAITLIST_REMOVED`, or `NOT_REGISTERED`. Null or invalid IDs (not matching `[A-Za-z0-9_-]{1,40}`) throw `IllegalArgumentException` before mutation.
 
-## Contract
-
-- `setPrerequisite(id, completed)` updates simulated eligibility for the demo.
-- `enroll(id)` returns `ENROLLED`, `WAITLISTED`, `ALREADY_ENROLLED`, `ALREADY_WAITLISTED`, or `INELIGIBLE`.
-- `drop(id)` returns `DROPPED` (and optional `promoted`), `WAITLIST_REMOVED`, or `NOT_REGISTERED`.
-- `snapshot()` returns an immutable state snapshot.
-- Invalid IDs throw `IllegalArgumentException`, mapped to HTTP 400. IDs must match `[A-Za-z0-9_-]{1,40}`.
-
-## Assumptions and policy
-
-1. One prerequisite exists and is considered satisfied only for learner IDs explicitly marked complete. No external records or identity system exist.
-2. Learners must be eligible **when initially requesting enrollment**. Ineligible requests are rejected rather than queued.
-3. If a waitlisted learner later loses eligibility, they **remain in their original queue position but are skipped** during promotion. The first currently eligible learner is promoted. If eligibility is restored before a later vacancy, they are eligible again from their retained position.
-4. Prerequisite revocation does not retroactively remove an enrolled learner. It prevents future promotion after a drop.
-5. Dropping a waitlisted learner cancels their request; dropping an unknown learner returns a clear no-op result.
-6. A newly arriving learner cannot bypass existing eligible queued learners; the service attempts promotion before direct enrollment.
+## Prerequisite and FIFO waitlist policy
+1. A learner is eligible only if the simulated prerequisite is marked complete. An **initially ineligible** learner is rejected rather than waitlisted.
+2. A learner may enroll only once or join the queue once. Duplicate requests return clear no-op codes.
+3. If a learner becomes ineligible **after joining the queue**, they **remain at their original position but are skipped** for promotion. The earliest **currently eligible** queued learner is promoted on vacancy. If eligibility is restored, the retained learner becomes eligible from their original FIFO position.
+4. Revoking eligibility of an already enrolled learner does not automatically eject that learner. New enrollment/promotion checks current eligibility.
+5. An eligible waiting learner has priority over a new arrival. If all waiting learners are currently ineligible, an eligible new arrival may fill an available seat without removing the retained ineligible entries.
+6. Dropping an enrolled learner opens a seat and triggers promotion; dropping from the waitlist cancels the entry. Repeated/unknown drops are no-ops.
 
 ## Invariants
-
 - `0 <= enrolled.size() <= capacity`.
-- Each ID appears at most once in each collection and cannot appear in both.
-- Only eligible learners are newly enrolled or promoted (an existing enrolled learner may later lose eligibility).
-- Waitlist insertion order is stable unless a learner is removed or promoted.
-- Each vacancy promotes the earliest currently eligible waiting learner, if one exists.
+- Enrolled IDs and waitlist IDs are unique and disjoint.
+- Duplicate requests neither change capacity nor reorder the queue.
+- Each *new* enrollment or promotion requires current eligibility, although existing enrolled learners may later lose eligibility.
+- Vacant seats go to the earliest currently eligible waiter, when one exists.
 
-## Algorithm and concurrency
+## Algorithm, concurrency and tradeoffs
+`enroll` validates eligibility, promotes eligible waiting learners into existing vacancies, then enrolls the newcomer if a seat remains or appends them to the FIFO queue. `drop` removes the learner, scans the waitlist in insertion order, and promotes the first eligible learner; ineligible learners are retained. Promotion scanning costs O(W) per seat.
 
-All service mutations and snapshots are `synchronized` on the same service instance. LinkedHashSet gives deterministic FIFO insertion order and duplicate prevention. On drop, remove the learner and scan the queue for the first eligible ID; skip but retain ineligible IDs; remove and enroll the selected learner atomically. Promotion repeats until no vacancy or no eligible waiting learner remains. Complexity is O(W) per promoted seat, acceptable for this bounded prototype.
-
-## Tradeoffs
-
-JDK built-in `HttpServer` avoids external dependencies. UI is intentionally thin and optional relative to assessment scope. State is lost on restart. The prerequisite endpoint is a demo/test control, not an authenticated academic record. No persistence, distributed locks, auditing, user identity, or production security are provided.
+All public service operations and snapshots are `synchronized` on the same object. Check/mutate/promote is atomic in one JVM. The suite includes a 60-request concurrent enrollment test verifying capacity and uniqueness. State is in memory and disappears on restart; cross-process transactions and production identity/security are intentionally out of scope. `Demo.java` is a tiny executable illustration rather than a new application platform.
