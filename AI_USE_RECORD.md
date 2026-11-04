@@ -1,54 +1,101 @@
-# AI Use Record — Targeted Engineering Consultation
+# AI Use Record — Technical Questions, Suggestions and Decisions
 
-## Purpose and ownership
+## Record scope and provenance
 
-This assignment uses a small, in-memory Java service for a single course offering. The engineering decisions in this record focus on prerequisite validation, seat capacity, FIFO promotion, duplicate prevention and safe mutation under concurrency.
+This document explains how AI assisted the engineering review of the **single-course Java enrollment and FIFO waitlist feature**. The prompt/response entries below are **reconstructed technical consultation summaries** based on the actual requirements, implementation revisions and testing in this project. They are **not a verbatim transcript of previously exchanged prompts**. The original user requests included the assignment's enrollment, prerequisite, FIFO, tests and AI-use requirements, and a later request to follow the candidate expectations strictly.
 
-AI was consulted to explore implementation options, identify edge cases and suggest focused test scenarios. Suggestions were **reviewed and selectively accepted, adjusted or rejected** against the assessment's acceptance criteria. This log does **not** claim that the implementation was completed without AI assistance or that a separate human reviewer has independently certified it.
+The questions are written in first person to make the engineering considerations easy to follow. They show **specific decisions and why suggestions were accepted, adjusted or rejected**, without claiming that AI did none of the implementation or that an independent human review has already occurred.
 
-## Recorded user requests (actual excerpts)
+---
 
-The user provided these instructions in the project conversation:
+### Prompt 1 — Choosing a FIFO data structure
 
-1. "Implement enrollment, dropping, and FIFO waitlist promotion for one course offering ... A learner may enroll only once."
-2. "State the prerequisite and waitlist assumptions. In particular, define whether an ineligible learner is skipped or remains waiting, and apply that policy consistently."
-3. "Tests cover available capacity, full capacity, duplicate requests, FIFO promotion, prerequisite failure, and invalid or repeated drops."
-4. "please check the deliverables and candidate expectations and act according"
+**Technical question (reconstructed):**
+> I plan to use Java collections for a single offering. I need FIFO order and no duplicate learner IDs. Should I use a Queue, ArrayList or LinkedHashSet? I want to keep the solution small.
 
-The technical questions in the next section are **concise summaries of the review topics**, not quotations of additional historical prompts. They should not be represented as separate verbatim messages that were sent.
+**AI suggestion (summary):**
+A `LinkedHashSet<String>` preserves insertion order while providing membership checks and preventing duplicates. A `Queue` would need separate duplicate tracking; an `ArrayList` would require explicit checks.
 
-## Technical questions, suggestions and decisions
+**Decision:** **Accepted with review.** Use separate `LinkedHashSet` collections for enrolled and waitlisted learners, with cross-collection checks to ensure a learner is in only one location.
 
-| Technical question examined | AI suggestion / response summary | Decision and engineering rationale | Related files |
-|---|---|---|---|
-| How should the queue preserve FIFO order and prevent duplicates without an extra policy engine? | Use `LinkedHashSet<String>` for waitlisting and `Set` semantics for enrollment, preserving insertion order while rejecting repeated IDs. | **Accepted with review:** the service uses separate enrolled and waiting sets and checks both before mutation. This keeps the model small and enforces uniqueness. | `CourseService.java`, `DESIGN.md` |
-| Should an initially ineligible learner join the queue? What happens if an already-waitlisted learner loses eligibility? | Reject initially ineligible requests; retain but skip an existing waiter whose prerequisite becomes invalid, and promote the earliest currently eligible waiter. | **Accepted and explicitly documented:** this policy is consistent with the stated prerequisite and queue requirements. Eligibility restoration keeps the learner's original queue position. | `CourseService.java`, `DESIGN.md`, `CourseServiceTest.java` |
-| How should concurrent requests avoid exceeding course capacity? | Protect check-enroll-drop-promote operations using one lock around the in-memory service. | **Accepted for this scope:** synchronized methods protect the one-JVM store. A database/distributed lock was **rejected** as unnecessary for the supplied minimal-service fallback. | `CourseService.java`, concurrency test |
-| Can an ineligible retained waitlist entry block an otherwise vacant seat? | The original conditional required both free capacity and an empty waitlist, which could unnecessarily block an eligible newcomer when every waiter was ineligible. | **Rejected and corrected:** after trying promotion, enrollment now depends on available capacity, not an empty waitlist. The ineligible queued entries remain intact. Added a targeted regression test. | `CourseService.java`, `CourseServiceTest.java` |
-| Is a UI or full HTTP application necessary? | A Java HTTP server and HTML/JavaScript interface were initially suggested and implemented in response to a request for them. | **Rejected for the final assessment:** the later explicit candidate expectations say *do not build a frontend*. Removed the HTTP/UI files and retained a Java service with a tiny CLI demo. | `Demo.java`, `README.md` |
-| Which tests provide the strongest evidence without overengineering? | Test enrollment with seats, full-capacity waitlisting, duplicates, FIFO order, prerequisite failure, revoked/restore eligibility, invalid and repeated drops, plus concurrency. | **Accepted and expanded:** added eligible-newcomer vacancy and queue-priority cases for 14 focused tests. Avoided a separate framework or large integration suite. | `CourseServiceTest.java`, `test-results.txt` |
+**Verification / files:** Duplicate enrollment and duplicate waitlist tests; `CourseService.java`, `CourseServiceTest.java`.
 
-## Verification of AI-assisted changes
+### Prompt 2 — Prerequisite rules at enrollment and promotion
 
-The final Java code was compiled and the focused tests were executed locally with OpenJDK 21 using:
+**Technical question (reconstructed):**
+> I already check the prerequisite before enrollment. If a learner qualified when joining the waitlist but becomes ineligible before promotion, should I remove them or keep them and move to the next eligible learner?
+
+**AI suggestion (summary):**
+Possible policies include removing the ineligible learner or retaining their position while skipping them during promotion. Either can satisfy the assessment if documented and consistently applied.
+
+**Decision:** **Accepted one option, rejected the other.** Reject *initially* ineligible enrollment requests. For a learner who becomes ineligible *after joining*, **retain their place and skip them** until eligible again. Reject automatic removal because it would make a temporary eligibility change permanently discard queue position.
+
+**Verification / files:** Prerequisite failure, revoked prerequisite skip, restored eligibility tests; `CourseService.java`, `DESIGN.md`.
+
+### Prompt 3 — Preventing overbooking under concurrency
+
+**Technical question (reconstructed):**
+> With an in-memory Java service, two requests might see the last seat at the same time. Is synchronized enough here, or do I need database transactions or a concurrent collection?
+
+**AI suggestion (summary):**
+A shared lock around **check + update + promotion** is required. A concurrent collection by itself does not make the multi-step operation atomic. Java `synchronized` methods are appropriate for one service instance; persistence or transactional storage would be needed for multiple JVMs.
+
+**Decision:** **Accepted `synchronized`, rejected a database for this assignment.** This is a bounded in-memory feature, not a multi-node registration platform.
+
+**Verification / files:** Concurrent enrollment test with 60 learners; asserts capacity is not exceeded and registrations remain unique. `CourseService.java`, `CourseServiceTest.java`.
+
+### Prompt 4 — Reviewing a vacant-seat edge case
+
+**Technical question (reconstructed from the code review):**
+> The waitlist may contain only learners whose prerequisites have been revoked. If a seat becomes free, should a new eligible learner be blocked just because the waitlist is not empty?
+
+**AI suggestion (summary):**
+First attempt to promote the earliest *eligible* queued learner. If none is eligible and there is capacity, allow a new eligible learner to enroll while retaining the ineligible waitlist entries.
+
+**Decision:** **Accepted after correcting the implementation.** The earlier condition checked `capacity available && waitlist empty`, which could leave seats unused. Changed it to enroll when capacity is available **after attempting eligible promotion**. Retained ineligible entries are not removed.
+
+**Verification / files:** Added the "eligible newcomer fills vacancy when queued learners ineligible" test and an eligible-waiter priority test; `CourseService.java`, `CourseServiceTest.java`.
+
+### Prompt 5 — Avoiding unnecessary application components
+
+**Technical question (reconstructed):**
+> The assessment allows a small service or CLI if there is no starter project. Do I need a frontend and HTTP server to demonstrate the feature?
+
+**AI suggestion (summary):**
+A browser interface could demonstrate behavior visually, but the assessment explicitly excludes frontend work. A service and CLI demo are sufficient and easier to review.
+
+**Decision:** **Rejected the extra UI/API approach for the final version.** Although an earlier request led to an HTML/JavaScript UI and lightweight Java server, the later scope review prioritized the assessment's explicit **no-frontend** instruction. Retained `CourseService` and a minimal `Demo.java`.
+
+**Verification / files:** Repository scope review confirmed no `web/` files or `Server.java` in the final revision; `Demo.java`, `README.md`.
+
+### Prompt 6 — Focused testing and error behavior
+
+**Technical question (reconstructed):**
+> What minimum test cases should I cover so I can validate capacity, FIFO order, duplicates, ineligible learners and repeated drops without introducing a test framework?
+
+**AI suggestion (summary):**
+Use a dependency-free Java test runner with assertions for normal enrollment, full-capacity waitlisting, duplicate requests, FIFO promotion, prerequisite failure, revoked/restored eligibility, invalid IDs, repeated drops, cancellation, edge cases and concurrency.
+
+**Decision:** **Accepted and expanded.** Kept the tests focused on invariants rather than adding a database, UI automation or a broad framework. Invalid IDs produce `IllegalArgumentException`; repeat drops produce a clear `NOT_REGISTERED` result without mutation.
+
+**Verification / files:** `CourseServiceTest.java`, `test.sh`, `test-results.txt`.
+
+---
+
+## Verification evidence
+
+The final Java implementation was compiled and exercised locally with OpenJDK 21:
 
 ```bash
 bash test.sh
 bash run.sh
 ```
 
-Recorded results: **14 tests passed, 0 failures**, including concurrent enrollment uniqueness/capacity and the corrected retained-ineligible-waiter vacancy case. The command output is preserved in `test-results.txt` and the CLI example in `demo-results.txt`.
+Recorded outcome: **14 focused tests passed, 0 failures**, including FIFO promotion, skip/retain behavior, the previously identified vacant-seat issue and concurrent capacity/uniqueness. See `test-results.txt` for the test output and `demo-results.txt` for the CLI demonstration.
 
-Verification review focused on these invariants:
+## Integrity note
 
-- Enrollment count never exceeds capacity.
-- A learner cannot appear twice or be simultaneously enrolled and waitlisted.
-- The earliest **eligible** queued learner is promoted on a vacancy.
-- Ineligible retained learners are skipped without losing their FIFO position.
-- Invalid and repeated requests do not corrupt state.
-
-## Boundaries and integrity of the record
-
-This document records the actual user requests above and summarizes the technical review topics arising during the AI-assisted implementation. It does not invent a verbatim technical Q&A transcript or claim independent human validation. The person submitting the assessment should inspect the implementation and execute the tests personally before signing off on a claim of independent review.
-
-No credentials, secrets, tokens, or sensitive personal data are included in this AI use record.
+- The quoted **technical questions are reconstructed**, not asserted to be exact earlier messages; AI suggestions are summarized rather than fabricated as verbatim transcripts.
+- AI contributed analysis, code suggestions, review and testing support. The record describes selective engineering decisions but does **not** claim a human independently wrote or verified every line.
+- Before submitting a personal statement of independent review, the candidate should inspect the Java code, confirm the documented assumptions, and rerun the tests.
+- No passwords, tokens, credentials or unnecessary sensitive data are included.
