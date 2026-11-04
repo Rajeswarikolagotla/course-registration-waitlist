@@ -1,57 +1,46 @@
-# Course Registration — Java Backend + HTML/JavaScript Frontend
+# Course Waitlist — AI-Assisted Engineering Assessment
 
-Implements the assessment's one-offering enrollment, drop and FIFO waitlist feature. The original PDF excludes a frontend; this submission **intentionally adds a minimal frontend at the user's explicit request**. No database, framework, authentication or external dependencies.
+A **single Java in-memory service** implementing one offering's enrollment, dropping, prerequisite validation and FIFO promotion. No starter project was supplied; this follows the assessment's permitted minimal service/CLI fallback. **No frontend, database, framework or deployment** is included.
 
-## Requirements
-JDK 21+ (Java 17+ should also work), a browser, and Bash for the convenience scripts. Run from the project root.
+## Requirements and setup
+JDK 21 (tested with OpenJDK 21), no external libraries. Run from repository root.
 
-## Run
+**Run CLI demonstration (Linux/macOS Bash):**
 ```bash
-./run.sh
+bash run.sh
 ```
-Open http://127.0.0.1:8080. Default course capacity is 2 (set in `Server.java`). Change port with `./run.sh 8090`.
-
-Windows PowerShell:
+**Run tests (Linux/macOS Bash):**
+```bash
+bash test.sh
+```
+**Windows PowerShell:**
 ```powershell
 New-Item -ItemType Directory -Force out | Out-Null
-javac -d out src/main/java/com/example/waitlist/*.java
-java -cp out com.example.waitlist.Server
-```
-
-## Tests
-```bash
-./test.sh
-```
-Windows PowerShell:
-```powershell
-javac -d out src/main/java/com/example/waitlist/*.java src/test/java/com/example/waitlist/*.java
+javac -d out src/main/java/com/example/waitlist/CourseService.java Demo.java
+java -cp out Demo
+javac -d out src/main/java/com/example/waitlist/CourseService.java src/test/java/com/example/waitlist/CourseServiceTest.java
 java -cp out com.example.waitlist.CourseServiceTest
 ```
 
-## Demo workflow
-1. Mark prerequisite complete for `alice`, `bob`, and `carol`.
-2. Enroll `alice` and `bob`; both fill the two seats.
-3. Enroll `carol`; she is waitlisted.
-4. Drop `alice`; `carol` is automatically promoted.
-5. Repeat requests to see idempotent/clear result codes.
+The demo registers Alice, queues Bob and Carol, drops Alice and promotes Bob. The **14 focused tests** check vacancies, capacity, FIFO, eligibility, duplicates, invalid IDs, repeat drops and concurrent requests. Executed output is in `test-results.txt`.
 
-## API
-All POST endpoints accept `application/x-www-form-urlencoded` parameters:
-- `POST /api/prerequisite` — `learner=alice&completed=true` or `false`.
-- `POST /api/enroll` — `learner=alice`.
-- `POST /api/drop` — `learner=alice`.
-- `GET /api/state` — capacity, enrolled and waitlisted arrays.
-
-Example:
-```bash
-curl -X POST -d 'learner=alice&completed=true' http://127.0.0.1:8080/api/prerequisite
-curl -X POST -d 'learner=alice' http://127.0.0.1:8080/api/enroll
-curl http://127.0.0.1:8080/api/state
+## Java service API
+```java
+CourseService course = new CourseService(2);
+course.setPrerequisite("alice", true);
+CourseService.Result result = course.enroll("alice");
+CourseService.Result dropped = course.drop("alice");
+CourseService.Snapshot state = course.snapshot();
 ```
+Enrollment codes: `ENROLLED`, `WAITLISTED`, `INELIGIBLE`, `ALREADY_ENROLLED`, `ALREADY_WAITLISTED`. Drop codes: `DROPPED`, `WAITLIST_REMOVED`, `NOT_REGISTERED`. Invalid learner IDs raise `IllegalArgumentException` without state changes. IDs must match `[A-Za-z0-9_-]{1,40}`.
 
 ## Files
-- `src/main/java/com/example/waitlist/CourseService.java` — synchronized business logic.
-- `src/main/java/com/example/waitlist/Server.java` — lightweight HTTP server and static asset serving.
-- `src/test/java/com/example/waitlist/CourseServiceTest.java` — 12 automated test cases.
-- `web/` — HTML, CSS, and vanilla JavaScript UI.
-- `DESIGN.md`, `AI_USE_RECORD.md`, `LIMITATIONS.md`, `test-results.txt`, `http-smoke-test.txt` — assessment evidence.
+- `src/main/java/com/example/waitlist/CourseService.java` — single-offering service.
+- `src/test/java/com/example/waitlist/CourseServiceTest.java` — 14 assertions-based test cases.
+- `Demo.java`, `run.sh`, `test.sh` — runnable example and test commands.
+- `DESIGN.md` — boundary, data/API model, invariants, skip/retain policy and synchronization.
+- `AI_USE_RECORD.md` — prompts, contribution decisions and verification evidence.
+- `LIMITATIONS.md` — risks within scope.
+- `test-results.txt`, `demo-results.txt` — actual execution records.
+
+The PDF references `Course-Registration-Rubric-Score.md`, but that separate file was not supplied; scoring was not fabricated.
