@@ -34,7 +34,7 @@ public final class CourseService {
         if (!completedPrerequisites.contains(learner)) return new Result("INELIGIBLE", "Prerequisite not completed", learner, null);
         // No bypass: if a queue exists, eligible queued learners take priority.
         promote();
-        if (enrolled.size() < capacity && waitlist.isEmpty()) {
+        if (enrolled.size() < capacity) {
             enrolled.add(learner);
             return new Result("ENROLLED", "Enrollment successful", learner, null);
         }
