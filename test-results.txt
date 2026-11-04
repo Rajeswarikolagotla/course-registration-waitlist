@@ -9,5 +9,7 @@ PASS retained learner eventually promoted
 PASS invalid IDs
 PASS repeated drop
 PASS waitlist cancellation
+PASS eligible newcomer fills vacancy when queued learners ineligible
+PASS eligible waiting learner takes priority over new arrival
 PASS capacity invariant under concurrency
-ALL TESTS PASSED: 12
+ALL TESTS PASSED: 14
