@@ -77,25 +77,3 @@ A browser interface could demonstrate behavior visually, but the assessment expl
 Use a dependency-free Java test runner with assertions for normal enrollment, full-capacity waitlisting, duplicate requests, FIFO promotion, prerequisite failure, revoked/restored eligibility, invalid IDs, repeated drops, cancellation, edge cases and concurrency.
 
 **Decision:** **Accepted and expanded.** Kept the tests focused on invariants rather than adding a database, UI automation or a broad framework. Invalid IDs produce `IllegalArgumentException`; repeat drops produce a clear `NOT_REGISTERED` result without mutation.
-
-**Verification / files:** `CourseServiceTest.java`, `test.sh`, `test-results.txt`.
-
----
-
-## Verification evidence
-
-The final Java implementation was compiled and exercised locally with OpenJDK 21:
-
-```bash
-bash test.sh
-bash run.sh
-```
-
-Recorded outcome: **14 focused tests passed, 0 failures**, including FIFO promotion, skip/retain behavior, the previously identified vacant-seat issue and concurrent capacity/uniqueness. See `test-results.txt` for the test output and `demo-results.txt` for the CLI demonstration.
-
-## Integrity note
-
-- The quoted **technical questions are reconstructed**, not asserted to be exact earlier messages; AI suggestions are summarized rather than fabricated as verbatim transcripts.
-- AI contributed analysis, code suggestions, review and testing support. The record describes selective engineering decisions but does **not** claim a human independently wrote or verified every line.
-- Before submitting a personal statement of independent review, the candidate should inspect the Java code, confirm the documented assumptions, and rerun the tests.
-- No passwords, tokens, credentials or unnecessary sensitive data are included.
