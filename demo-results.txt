@@ -1,0 +1,5 @@
+Result[code=ENROLLED, message=Enrollment successful, learner=alice, promoted=null]
+Result[code=WAITLISTED, message=Course full; joined FIFO waitlist, learner=bob, promoted=null]
+Result[code=WAITLISTED, message=Course full; joined FIFO waitlist, learner=carol, promoted=null]
+Result[code=DROPPED, message=Dropped and promoted bob, learner=alice, promoted=bob]
+Snapshot[capacity=1, enrolled=[bob], waitlisted=[carol]]
